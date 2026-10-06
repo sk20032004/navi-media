@@ -18,6 +18,7 @@
 - **效果演示**：
 - <img width="1356" height="856" alt="demo1" src="https://github.com/user-attachments/assets/60e07c6b-add6-48a3-acb8-13b716290f4d" />
 <img width="972" height="675" alt="setting" src="https://github.com/user-attachments/assets/ef74584e-958c-46fc-b2f1-fcb69cda5e9e" />
+<img width="1360" height="864" alt="demo2" src="https://github.com/user-attachments/assets/5718b862-5580-4f60-9e57-237183faade3" />
 
 ## 下载安装
 
