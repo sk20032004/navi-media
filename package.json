@@ -1,6 +1,6 @@
 {
   "name": "navi-media",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "本地影音库：卡片墙浏览、交互式刮削、Emby 兼容输出",
   "author": "NaviMedia",
   "main": "main.js",
@@ -54,11 +54,15 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         },
         {
           "target": "portable",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.ico",
