@@ -18,3 +18,6 @@ screen.png
 # Python 缓存
 __pycache__/
 *.pyc
+
+# GitHub 发布临时目录（含令牌，绝不入库）
+.ghtmp/
