@@ -4,7 +4,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const crypto = require('crypto');
 const { spawn } = require('child_process');
-const { scanFolder, parseCode, VIDEO_EXT } = require('./lib/scanner');
+const { scanFolder, parseCode, readSidecarMeta, VIDEO_EXT } = require('./lib/scanner');
 const scraper = require('./lib/scraper');
 
 let mainWindow = null;
@@ -180,6 +180,30 @@ async function repairLooseVideos() {
     } catch (e) { logLine('[archive] 修复失败 ' + (item.path || '?') + ': ' + e.message); }
   }
   if (changed) saveDb(db);
+}
+
+// 启动自愈：库里资料不全的条目（刮削失败 / 曾经丢过库），
+// 用视频同目录的 metadata.json 把标题、演员、标签、简介、封面、截图补回来。
+// 只在条目「缺封面或缺简介」时才动它，已经有完整资料的条目一律跳过，不会覆盖新数据。
+async function restoreSidecars() {
+  let db;
+  try { db = loadDb(); } catch { return; }
+  let n = 0;
+  for (const item of (db.items || [])) {
+    try {
+      if (!item.path || !fs.existsSync(item.path)) continue;
+      if (item.cover && item.synopsis) continue;   // 资料完整，跳过
+      const side = await readSidecarMeta(item.path);
+      if (!side) continue;
+      applySidecar(item, side);
+      n++;
+    } catch (e) { logLine('[restore] 补全失败 ' + (item.path || '?') + ': ' + e.message); }
+  }
+  if (n) {
+    saveDb(db);
+    rememberTags(db.items);
+    logLine('[restore] 启动自愈：从 metadata.json 补全 ' + n + ' 条');
+  }
 }
 
 // 写入 metadata.json（不存绝对路径，避免换盘后失效）
@@ -882,6 +906,38 @@ function scheduleWatchScan(dir) {
   }, 2000));   // 等文件拷贝完成再扫，避免读到半截文件
 }
 
+// 把同目录 metadata.json 里的刮削成果填进新条目（重扫/重建库用）
+// 覆盖掉「只有番号+文件名」的初始值，并把状态置为 manual，
+// 这样自动刮削队列会跳过它（不会把已经刮好的资料再刮一遍）。
+function applySidecar(item, side) {
+  const m = side.meta || {};
+  const txt = (v) => (v === undefined || v === null ? '' : String(v));
+  if (m.code) item.code = txt(m.code).trim();
+  if (m.title) item.title = txt(m.title).trim();
+  if (!item.code && !String(item.title || '').trim()) item.title = item.name.replace(/\.[^.]+$/, '');
+  item.date = txt(m.date);
+  item.actresses = Array.isArray(m.actresses) ? m.actresses : [];
+  item.actressAlias = (m.actressAlias && typeof m.actressAlias === 'object') ? m.actressAlias : {};
+  item.tags = Array.isArray(m.tags) ? m.tags : [];
+  item.category = txt(m.category);
+  item.synopsis = txt(m.synopsis);
+  item.rating = Number(m.rating) || 0;
+  item.duration = m.duration || '';
+  item.director = txt(m.director);
+  item.studio = txt(m.studio);
+  item.publisher = txt(m.publisher);
+  item.detailUrl = txt(m.detailUrl);
+  item.provider = txt(m.provider);
+  item.dir = side.dir;
+  // 图片一律用绝对路径引用（cover://local/…），文件不存在就不设，避免黑图
+  if (side.coverName) item.cover = fileUrl(path.join(side.dir, side.coverName));
+  if (side.previews && side.previews.length) {
+    item.previews = side.previews.map(f => fileUrl(path.join(side.dir, f)));
+  }
+  item.status = item.code ? 'manual' : 'none';
+  item.restoredAt = new Date().toISOString();
+}
+
 // 扫描目录并入库（含自动刮削），返回新增条目
 async function importFolder(folder) {
   const files = await scanFolder(folder);
@@ -889,7 +945,7 @@ async function importFolder(folder) {
   const known = new Set(db.items.map(i => i.path));
   // 回收站里的影片不重新入库（文件仍在硬盘原位，等用户在回收站里做最终处理）
   const trashed = new Set((db.trash || []).map(t => path.normalize(t.item && t.item.path || '')));
-  const fresh = [];
+  const fresh = [], restored = [];
   for (const f of files) {
     if (known.has(f.path) || trashed.has(path.normalize(f.path))) continue;
     const item = {
@@ -907,14 +963,29 @@ async function importFolder(folder) {
       rating: 0
     };
     if (!item.code) item.status = 'none';
+    // 同目录已有 metadata.json（之前刮过 / 从别处搬来的资产）→ 直接读回来，不重复刮削
+    try {
+      const side = await readSidecarMeta(f.path);
+      if (side) {
+        // 资产在「同级同名子目录」里、视频还留在外面 → 顺手把视频移进去（与刮削归档规则一致）
+        if (path.normalize(side.dir) !== path.normalize(path.dirname(item.path))) {
+          try { await ensureAssetsDir(item); }
+          catch (e) { logLine('[restore] 视频归位失败 ' + f.path + ': ' + e.message); }
+        }
+        applySidecar(item, side);
+        restored.push(item);
+      }
+    } catch (e) { logLine('[restore] 读取 metadata 失败 ' + f.path + ': ' + e.message); }
     db.items.push(item);
     fresh.push(item);
   }
   saveDb(db);
+  if (restored.length) logLine('[restore] 从 metadata.json 恢复 ' + restored.length + ' 条已有刮削结果');
+  // 已经有刮削结果的条目（status=manual）会被队列自动跳过，只处理真正没刮过的
   if (fresh.length && loadSettings().scrape.autoScrape) {
     autoScrapeQueue(fresh); // 后台执行，不阻塞
   }
-  return { added: fresh.length, total: db.items.length, fresh };
+  return { added: fresh.length, total: db.items.length, fresh, restored: restored.length };
 }
 
 function updateAndPush(item) {
@@ -1507,6 +1578,7 @@ app.whenReady().then(async () => {
   scraper.setBrowserFetch(browserFetchText);   // 挑战页/403 时用隐藏浏览器兜底
   await applyProxyConfig(loadSettings().network);
   await repairLooseVideos();   // 旧版归档规则遗留的散落视频先归位，再开监测
+  await restoreSidecars();     // 库里缺资料的条目，用同目录 metadata.json 补全（刮削失败的兜底）
   createWindow();
   // 目录监测：新文件落入已登记目录时自动入库并刮削
   startWatchers();
