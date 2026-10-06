@@ -1,0 +1,20 @@
+# 依赖与构建产物
+node_modules/
+dist/
+
+# 本地开发与调试脚本、调试产物
+# （含本机绝对路径、抓取页面样例、探测脚本，不随仓库发布；本地文件保留）
+tools/
+
+# 本机专用的启动器（含本机绝对路径），发布版请用 README 里的 npm start
+启动影音库.bat
+
+# 运行时临时文件
+run.log
+screen.png
+/shot_*.png
+/detail_shot.png
+
+# Python 缓存
+__pycache__/
+*.pyc

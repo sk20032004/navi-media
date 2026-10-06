@@ -1,0 +1,81 @@
+{
+  "name": "navi-media",
+  "version": "0.1.0",
+  "description": "本地影音库：卡片墙浏览、交互式刮削、Emby 兼容输出",
+  "author": "NaviMedia",
+  "main": "main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "start:safe": "electron . --no-gpu",
+    "dist": "electron-builder --win",
+    "dist:installer": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "koffi": "^2.12.1"
+  },
+  "build": {
+    "appId": "com.navimedia.navi-media",
+    "productName": "我的影音库",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "package.json",
+      "!tools/**",
+      "!build/**",
+      "!dist/**",
+      "!run.log",
+      "!screen.png",
+      "!*.bat"
+    ],
+    "asar": true,
+    "npmRebuild": false,
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icon.ico",
+        "to": "icon.ico"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "executableName": "NaviMedia",
+      "artifactName": "NaviMedia-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "我的影音库",
+      "artifactName": "NaviMedia-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "NaviMedia-Portable-${version}.exe"
+    }
+  }
+}

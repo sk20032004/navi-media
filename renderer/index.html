@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' cover: wallpaper: https: data:; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>我的影音库</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body data-theme="light">
+  <!-- 壁纸图层：毛玻璃/自定义壁纸统一画在这里，保证 backdrop-filter 能采样模糊 -->
+  <div id="wallpaper"></div>
+
+  <!-- 顶栏 -->
+  <header id="titlebar">
+    <div class="tb-left">
+      <span class="logo">🎬</span>
+      <span class="app-title" data-i18n="appTitle">我的影音库</span>
+    </div>
+    <input id="searchInput" type="text" data-i18n-ph="searchPh" placeholder="搜索片名 / 番号 / 演员 / 分类 / 标签...">
+    <div class="tb-right">
+      <button id="btnSettings" class="btn icon" title="设置">⚙</button>
+      <span class="win-btns">
+        <button id="winMin">─</button>
+        <button id="winMax">□</button>
+        <button id="winClose">✕</button>
+      </span>
+    </div>
+  </header>
+
+  <div id="layout">
+    <!-- 侧边栏 -->
+    <aside id="sidebar">
+      <div class="side-item active" data-filter="home"><span>🏠</span> <span data-i18n="home">首页</span></div>
+      <div class="side-item" data-filter="all"><span>🎞</span> <span data-i18n="allVideos">全部视频</span> <em id="countAll">0</em></div>
+      <div class="side-item" data-filter="fav"><span>❤</span> <span data-i18n="myFavorites">我的收藏</span> <em id="countFav">0</em></div>
+      <div class="side-item" data-filter="failed"><span>❗</span> <span data-i18n="scrapeFailed">刮削失败</span> <em id="countFailed">0</em></div>
+      <div class="side-item" data-filter="trash"><span>🗑</span> <span data-i18n="trash">回收站</span> <em id="countTrash">0</em></div>
+      <div class="side-sep" data-i18n="categories">分类</div>
+      <div id="categoryList"></div>
+      <div class="add-cat-input hidden" id="addCatInput"><input id="newCatName" type="text" data-i18n-ph="catPh" placeholder="分类名称，回车确认" maxlength="30"></div>
+      <div class="side-item add-cat" id="btnAddCategory"><span>＋</span> <span data-i18n="addCategory">添加分类</span></div>
+
+      <div class="side-foot">
+        <div class="sys-stats">
+          <div class="sys-stat"><span class="ss-label">🖥 CPU</span><b id="ssCpu">--</b></div>
+          <div class="sys-stat"><span class="ss-label">🗄 <span data-i18n="mem">内存</span></span><b id="ssMem">--</b></div>
+        </div>
+        <button class="side-btn" id="btnScanAll" data-i18n="scanAll" title="重新扫描设置里登记的所有刮削目录">⟳ 扫描全部目录</button>
+        <div class="scrape-progress hidden" id="scrapeProgress">
+          <div class="sp-row"><span class="sp-spin">◐</span><span class="sp-text" id="spText" data-i18n="preparing">准备中...</span></div>
+          <div class="sp-bar"><i id="spBar"></i></div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 卡片区 -->
+    <main id="gridHost">
+      <!-- 轮播展示墙（群晖 Video 风格）：自动轮播大图，点击进详情 -->
+      <div class="hero hidden" id="hero">
+        <div class="hero-track" id="heroTrack"></div>
+        <button class="hero-arrow prev" id="heroPrev" title="上一个">‹</button>
+        <button class="hero-arrow next" id="heroNext" title="下一个">›</button>
+        <div class="hero-dots" id="heroDots"></div>
+      </div>
+      <div class="search-info hidden" id="searchInfo"></div>
+      <div id="grid"></div>
+      <div class="pager hidden" id="pager">
+        <button class="btn pg-btn" id="pgPrev" data-i18n="prevPage">‹ 上一页</button>
+        <span class="pg-info" id="pgInfo"></span>
+        <button class="btn pg-btn" id="pgNext" data-i18n="nextPage">下一页 ›</button>
+      </div>
+    </main>
+  </div>
+
+  <!-- 详情 / 编辑 弹窗 -->
+  <!-- 封面预览（完整显示 + 滚轮缩放） -->
+  <div class="cover-lightbox hidden" id="coverLightbox">
+    <button class="lb-close" id="lbClose" title="关闭">✕</button>
+    <img id="lbImg" alt="封面预览">
+    <span class="lb-hint">滚轮缩放 · 点击空白处关闭</span>
+  </div>
+
+  <!-- 截图画廊（卡片左键弹出：大图 + 缩略图条） -->
+  <div class="modal hidden" id="shotModal">
+    <div class="modal-card shots-card">
+      <button class="modal-close" data-close="shotModal">✕</button>
+      <div class="shots-head">
+        <span class="shots-title" id="shotsTitle"></span>
+        <span class="shots-count" id="shotsCount"></span>
+      </div>
+      <div class="shots-stage">
+        <img id="shotsImg" alt="">
+        <button class="shots-nav prev hidden" id="shotsPrev" type="button" title="上一张">‹</button>
+        <button class="shots-nav next hidden" id="shotsNext" type="button" title="下一张">›</button>
+        <div class="shots-empty hidden" id="shotsEmpty">这个视频还没有截图<br>刮削成功后这里会展示预览图</div>
+      </div>
+      <div class="shots-thumbs" id="shotsThumbs"></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="detailModal">
+    <div class="modal-card wide">
+      <button class="modal-close" data-close="detailModal">✕</button>
+      <div class="detail-layout">
+        <div class="detail-left">
+          <div class="detail-gallery">
+            <div class="detail-poster">
+              <img id="dCover" alt="">
+              <button class="cover-edit" id="btnSetCover" type="button" title="选择本地图片并按封面比例裁切后作为封面">🖼 更换封面</button>
+            </div>
+            <div class="detail-previews" id="dPreviews"></div>
+            <button class="gallery-add" id="btnAddImage" type="button">＋ 添加图片</button>
+          </div>
+          <button class="gallery-fav" id="dFav" type="button" title="收藏"><span class="fi">♡</span>加入收藏</button>
+        </div>
+        <div class="detail-info">
+          <h2 id="dTitle">标题</h2>
+          <p class="d-path" id="dPath"></p>
+          <div class="d-synopsis" id="dSynopsis" style="display:none"></div>
+          <label>标题<br><input id="fTitle" type="text"></label>
+          <div class="row">
+            <label>番号<br><input id="fCode" type="text"></label>
+            <label>日期<br><input id="fDate" type="text" placeholder="2025-01-01"></label>
+          </div>
+          <label>演员（逗号分隔）<br><input id="fActresses" type="text"></label>
+          <div class="alias-hint hidden" id="dActressAlias"></div>
+          <label>分类（在主界面左侧「＋ 添加分类」里维护）<br><select id="fCategory"></select></label>
+          <div class="field-label">标签（回车添加，点 × 删除；下方为历史标签，点击加入）</div>
+          <div class="tag-editor" id="tagEditor">
+            <div class="tag-chips" id="tagChips"></div>
+            <input id="fTagInput" type="text" placeholder="输入新标签..." autocomplete="off">
+            <div class="tag-history hidden" id="tagHistory"></div>
+          </div>
+          <label>封面地址（远程 URL；留空则用左侧封面图）<br><input id="fCover" type="text" placeholder="https://..."></label>
+          <label>评分（0-5）<br><input id="fRating" type="number" min="0" max="5" step="0.5"></label>
+          <div class="btn-row">
+            <button class="btn primary" id="btnPlay">▶ 播放</button>
+            <button class="btn" id="btnOpenDir">打开所在文件夹</button>
+            <button class="btn accent" id="btnScrape">🔍 刮削</button>
+            <button class="btn" id="btnSaveItem">💾 保存</button>
+            <button class="btn danger" id="btnDeleteItem">删除影片（移到回收站）</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 刮削选择 弹窗 -->
+  <div class="modal hidden" id="scrapeModal">
+    <div class="modal-card">
+      <button class="modal-close" data-close="scrapeModal">✕</button>
+      <h2>刮削结果 <small>（选择一个应用到条目）</small></h2>
+      <div class="scrape-toolbar">
+        <input id="scrapeCode" type="text" placeholder="番号，如 ABC-123">
+        <button class="btn primary" id="btnScrapeSearch">搜索</button>
+      </div>
+      <div id="scrapeResults" class="scrape-results"><div class="scrape-empty">输入番号后点击搜索</div></div>
+    </div>
+  </div>
+
+  <!-- 设置 弹窗（左侧大类 + 右侧二级面板） -->
+  <div class="modal hidden" id="settingsModal">
+    <div class="modal-card settings-card">
+      <button class="modal-close" data-close="settingsModal">✕</button>
+      <h2 data-i18n="settingsTitle">设置</h2>
+      <div class="settings-layout">
+        <div class="settings-nav" id="settingsNav"></div>
+        <div class="settings-body" id="settingsBody"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btnSaveSettings">💾 <span data-i18n="save">保存</span></button>
+        <span class="save-hint" id="saveHint"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 图片裁切 弹窗（用户添加图片时按 3:2 裁切） -->
+  <div class="modal hidden" id="cropModal">
+    <div class="modal-card crop-card">
+      <button class="modal-close" data-close="cropModal">✕</button>
+      <h2>裁切图片 <small>（拖动选框调整位置，右下角圆点缩放，比例 3:2）</small></h2>
+      <div class="crop-stage" id="cropStage">
+        <img id="cropImg" alt="" draggable="false">
+        <div class="crop-box" id="cropBox">
+          <div class="crop-handle" id="cropHandle"></div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="btnCropSkip">跳过（用原图）</button>
+        <span class="crop-hint" id="cropHint"></span>
+        <button class="btn primary" id="btnCropOk">✓ 确认裁切</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 删除影片确认（警告：整个影片移入系统回收站） -->
+  <div class="modal hidden" id="delModal">
+    <div class="modal-card del-card">
+      <button class="modal-close" data-close="delModal">✕</button>
+      <h2>⚠ 删除影片</h2>
+      <p class="del-warn">影片将移入<b>软件回收站</b>（左侧「🗑 回收站」），主界面不再显示；<b>硬盘上的视频与刮削数据暂时保留在原位</b>。最终删除在回收站里进行。</p>
+      <div class="del-list" id="delList"></div>
+      <p class="del-note">提示：回收站里提供两种处理——「删除数据」仅清除软件记录（文件不动，可重新入库）；「删除硬盘源文件」才会把视频和刮削数据移入系统回收站。</p>
+      <div class="btn-row">
+        <button class="btn" data-close="delModal">取消</button>
+        <button class="btn danger" id="btnDelOk">🗑 移入回收站</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 回收站条目处理（两种删除方式） -->
+  <div class="modal hidden" id="trashModal">
+    <div class="modal-card del-card">
+      <button class="modal-close" data-close="trashModal">✕</button>
+      <h2>🗑 回收站处理</h2>
+      <div class="del-list" id="trashInfo"></div>
+      <p class="del-note" style="margin-top:10px">两种方式都不会清空所在的上层目录；「删除硬盘源文件」会先移入<b>系统回收站</b>，还可以从系统回收站找回。</p>
+      <div class="btn-row" style="flex-wrap:wrap">
+        <button class="btn" data-close="trashModal">取消</button>
+        <button class="btn" id="btnTrashData">📄 删除数据</button>
+        <button class="btn danger" id="btnTrashFiles">💾 删除硬盘源文件（含刮削数据）</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 移除刮削目录确认（警告） -->
+  <div class="modal hidden" id="dirDelModal">
+    <div class="modal-card del-card">
+      <button class="modal-close" data-close="dirDelModal">✕</button>
+      <h2>⚠ 移除刮削目录</h2>
+      <p class="del-warn">将从软件中移除该目录，并停止对它的新文件监测。</p>
+      <div class="del-list" id="dirDelList"></div>
+      <p class="del-note">硬盘上的文件<b>不会被删除</b>。已入库的条目默认保留（文件仍在原处）；只有勾选下面的选项，才会同时把库里属于该目录的条目移除。</p>
+      <label class="del-check"><input type="checkbox" id="dirDelAlsoItems"> 同时移除库中属于该目录的条目（只清记录，不删文件）</label>
+      <div class="btn-row">
+        <button class="btn" data-close="dirDelModal">取消</button>
+        <button class="btn danger" id="btnDirDelOk">移除目录</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 启动密码锁：开启后覆盖整个界面，背后主界面模糊 -->
+  <div class="lock-screen hidden" id="lockScreen">
+    <div class="lock-card">
+      <div class="lock-icon">🔒</div>
+      <div class="lock-title" data-i18n="lockTitle">我的影音库已锁定</div>
+      <div class="lock-sub" data-i18n="lockSub">请输入启动密码继续使用</div>
+      <input type="password" id="lockPass" data-i18n-ph="lockPh" placeholder="启动密码" autocomplete="off">
+      <button class="btn primary" id="lockBtn" data-i18n="unlock">解 锁</button>
+      <div class="lock-err" id="lockErr"></div>
+    </div>
+  </div>
+
+  <!-- 卡片右键菜单（与主题保持一致） -->
+  <div class="ctx-menu hidden" id="ctxMenu"></div>
+
+  <div id="toast" class="hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
