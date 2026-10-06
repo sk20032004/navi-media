@@ -340,7 +340,7 @@ body[data-theme="glass"] #titlebar { background: var(--panel-alpha); }
   overflow-y: auto;
   overflow-x: hidden;
   display: grid;
-  /* 列数由 renderer/app.js 按窗口宽度计算后写入（默认一行 6 个、最多两行，窗口放大/最大化时每行更多） */
+  /* 列数/行数由 renderer/app.js 按窗口宽高计算后写入（铺满可视区：列看宽度、行看高度，最少 2 行） */
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
   padding: 18px;

@@ -676,12 +676,16 @@ function startHeroTimer() {
 function stopHeroTimer() { if (hero.timer) { clearInterval(hero.timer); hero.timer = null; } }
 
 // ---------- 分页 ----------
-// 规则：一行固定 6 个、最多两行（默认 12 个/页）；多余的一律翻到下一页。
-// 窗口放大 / 最大化后一行能放更多，每页数量对应增加（卡片最小不小于 ~96px，避免过窄）。
-const GRID_ROWS = 2;      // 最多两行
+// 规则：一行 N 个（按窗口宽度算），行数按网格可视高度算——铺满当前窗口为准，
+// 最少 2 行（窗口特别矮时不至于只剩一排）。多余的一律翻到下一页。
+// 窗口放大 / 最大化 / 拉伸后，行数与列数都会重算，每页数量随之变化
+// （卡片最小不小于 ~96px 宽，避免过窄）。
+const GRID_ROWS_MIN = 2;  // 每页最少行数
+const GRID_ROWS_MAX = 12; // 每页最多行数（防止极端比例窗口下单页过多）
 const BASE_COLS = 6;      // 基准：一行 6 个
 const CARD_BASE_W = 182;  // 基准窗口宽度下的卡片宽度（决定什么时候能多塞一列）
 const CARD_MIN_W = 96;    // 卡片最小可读宽度（窗口很窄时允许少于 6 列）
+const CARD_TITLE_H = 37;  // .card-title 高度（上下 padding 8+8 + 一行 12.5px 文本）
 
 function gridCols() {
   const grid = $('#grid');
@@ -696,8 +700,29 @@ function gridCols() {
   return Math.max(1, Math.min(16, Math.min(byMin, Math.max(BASE_COLS, byBase))));
 }
 
+// 行数：按 #grid 的可视高度（flex 布局下已自动扣除轮播横幅、搜索提示条和分页条）动态计算。
+// #grid 本身 overflow-y:auto，行数只会取得保守值（向下取整），正常不会出现半行溢出滚动。
+function gridRows() {
+  const grid = $('#grid');
+  if (!grid) return GRID_ROWS_MIN;
+  const cs = getComputedStyle(grid);
+  const gapY = parseFloat(cs.rowGap) || parseFloat(cs.gap) || 16;
+  const padT = parseFloat(cs.paddingTop) || 18;
+  const padB = parseFloat(cs.paddingBottom) || 18;
+  const padL = parseFloat(cs.paddingLeft) || 18;
+  const padR = parseFloat(cs.paddingRight) || 18;
+  const availH = grid.clientHeight - padT - padB - 2; // 2px 安全余量
+  if (!(availH > 0)) return GRID_ROWS_MIN;
+  const cols = gridCols();
+  const availW = Math.max(120, grid.clientWidth - padL - padR);
+  const colW = Math.max(CARD_MIN_W, (availW - gapY * (cols - 1)) / cols);
+  const cardH = colW / 1.5 + CARD_TITLE_H + 2;  // 3:2 封面 + 标题行 + 上下边框
+  const rows = Math.floor((availH + gapY) / (cardH + gapY));
+  return Math.max(GRID_ROWS_MIN, Math.min(GRID_ROWS_MAX, rows));
+}
+
 function computePageSize() {
-  return gridCols() * GRID_ROWS;
+  return gridCols() * gridRows();
 }
 
 // 把列数写进样式，保证每行正好 N 个且不横向溢出
@@ -748,7 +773,7 @@ function renderGrid() {
   const grid = $('#grid');
   const all = sortViewItems(filteredItems());
   renderSearchInfo(all);
-  // 先按当前窗口宽度定好每行几个（一行 N 个 × 最多两行）；窗口放大/最大化时 N 变大，每页数量随之调整
+  // 按当前窗口定好每行列数与行数（列看宽度、行看高度），铺满可视区；窗口变化时随之调整
   state.pageSize = computePageSize();
   applyGridCols();
   const pages = Math.max(1, Math.ceil(all.length / state.pageSize));
