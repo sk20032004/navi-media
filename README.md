@@ -15,6 +15,9 @@
 - **右键快捷操作**：播放 / 收藏 / 编辑信息 / 刮削信息 / 打开文件位置 / 删除（进系统回收站，可反悔）
 - **三套主题**：浅白 / 暗黑 / 毛玻璃（Win32 BlurBehind），8 种主题色可选，中英文界面切换
 - **隐私保护**：可选启动密码锁；删除文件先进回收站；程序不联网上传任何数据（刮削请求除外）
+- **效果演示**：
+- <img width="1356" height="856" alt="demo1" src="https://github.com/user-attachments/assets/60e07c6b-add6-48a3-acb8-13b716290f4d" />
+<img width="972" height="675" alt="setting" src="https://github.com/user-attachments/assets/ef74584e-958c-46fc-b2f1-fcb69cda5e9e" />
 
 ## 下载安装
 
